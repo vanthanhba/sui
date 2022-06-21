@@ -21,9 +21,9 @@ use sui_types::{
     fp_ensure,
     messages::CertifiedTransaction,
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpoint, CheckpointContents,
-        CheckpointDigest, CheckpointFragment, CheckpointRequest, CheckpointResponse,
-        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpoint, SignedCheckpointProposal,
+        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
+        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
 use typed_store::{
@@ -185,15 +185,15 @@ impl CheckpointStore {
                 .map(|(digest, _)| digest);
             let transactions = CheckpointContents::new(transactions);
             let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
-            let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
+            let summary = SignedCheckpointSummary::new(
                 checkpoint_sequence,
                 self.name,
                 &*self.secret,
                 &transactions,
                 previous_digest,
-            ));
+            );
 
-            let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
+            let proposal_and_transactions = CheckpointProposal::new(summary, transactions);
             locals.current_proposal = Some(proposal_and_transactions);
         }
 
@@ -418,7 +418,7 @@ impl CheckpointStore {
 
         // Sign the new checkpoint
         let signed_checkpoint = AuthenticatedCheckpoint::Signed(
-            SignedCheckpoint::new_from_summary(checkpoint, self.name, &*self.secret),
+            SignedCheckpointSummary::new_from_summary(checkpoint, self.name, &*self.secret),
         );
 
         // Make a DB batch
@@ -435,7 +435,7 @@ impl CheckpointStore {
                 &self.fragments,
                 self.fragments.iter().filter_map(|(k, v)| {
                     // Delete all keys for checkpoints smaller than what we are committing now.
-                    if *v.proposer.0.checkpoint.sequence_number() <= checkpoint_sequence_number {
+                    if *v.proposer.checkpoint.sequence_number() <= checkpoint_sequence_number {
                         Some(k)
                     } else {
                         None
@@ -489,7 +489,7 @@ impl CheckpointStore {
         // Does the fragment event suggest it is for the current round?
         let next_checkpoint_seq = self.next_checkpoint();
         fp_ensure!(
-            *fragment.proposer.0.checkpoint.sequence_number() == next_checkpoint_seq,
+            *fragment.proposer.checkpoint.sequence_number() == next_checkpoint_seq,
             SuiError::GenericAuthorityError {
                 error: format!(
                     "Incorrect sequence number, expected {}",
@@ -501,19 +501,18 @@ impl CheckpointStore {
         // Only a fragment that involves ourselves to be sequenced through
         // this node.
         fp_ensure!(
-            fragment.proposer.0.auth_signature.authority == self.name
-                || fragment.other.0.auth_signature.authority == self.name,
+            fragment.proposer.authority() == &self.name || fragment.other.authority() == &self.name,
             SuiError::from("Fragment does not involve this node")
         );
 
         // Save in the list of local fragments for this sequence.
-        let other_name = if fragment.proposer.0.auth_signature.authority == self.name {
-            fragment.other.0.auth_signature.authority
+        let other_name = if fragment.proposer.authority() == &self.name {
+            fragment.other.authority()
         } else {
-            fragment.proposer.0.auth_signature.authority
+            fragment.proposer.authority()
         };
-        if !self.local_fragments.contains_key(&other_name)? {
-            self.local_fragments.insert(&other_name, fragment)?;
+        if !self.local_fragments.contains_key(other_name)? {
+            self.local_fragments.insert(other_name, fragment)?;
         } else {
             // We already have this fragment, so we can ignore it.
             return Err(SuiError::GenericAuthorityError {
@@ -604,19 +603,19 @@ impl CheckpointStore {
 
         // If the fragment contains us also save it in the list of local fragments
         let next_sequence_number = self.next_checkpoint();
-        if *_fragment.proposer.0.checkpoint.sequence_number() == next_sequence_number {
-            if _fragment.proposer.0.auth_signature.authority == self.name {
+        if *_fragment.proposer.checkpoint.sequence_number() == next_sequence_number {
+            if _fragment.proposer.authority() == &self.name {
                 self.local_fragments
-                    .insert(&_fragment.other.0.auth_signature.authority, &_fragment)
+                    .insert(_fragment.other.authority(), &_fragment)
                     .map_err(|_err| {
                         // There is a possibility this was not stored!
                         let fragment = _fragment.clone();
                         FragmentInternalError::Retry(Box::new(fragment))
                     })?;
             }
-            if _fragment.other.0.auth_signature.authority == self.name {
+            if _fragment.other.authority() == &self.name {
                 self.local_fragments
-                    .insert(&_fragment.proposer.0.auth_signature.authority, &_fragment)
+                    .insert(_fragment.proposer.authority(), &_fragment)
                     .map_err(|_err| {
                         // There is a possibility this was not stored!
                         let fragment = _fragment.clone();
@@ -640,7 +639,7 @@ impl CheckpointStore {
         let fragments: Vec<_> = self
             .fragments
             .values()
-            .filter(|frag| *frag.proposer.0.checkpoint.sequence_number() == next_sequence_number)
+            .filter(|frag| *frag.proposer.checkpoint.sequence_number() == next_sequence_number)
             .collect();
 
         // Run the reconstruction logic to build a checkpoint.
@@ -713,7 +712,7 @@ impl CheckpointStore {
                         .unwrap();
 
                     // Extract the diff
-                    let diff = if fragment.proposer.0.auth_signature.authority == self.name {
+                    let diff = if fragment.proposer.authority() == &self.name {
                         fragment.diff
                     } else {
                         fragment.diff.swap()
@@ -789,7 +788,7 @@ impl CheckpointStore {
     /// it came from the internal consensus.
     pub fn handle_checkpoint_certificate(
         &mut self,
-        checkpoint: &CertifiedCheckpoint,
+        checkpoint: &CertifiedCheckpointSummary,
         contents: &Option<CheckpointContents>,
         committee: &Committee,
     ) -> Result<CheckpointResponse, SuiError> {
@@ -939,15 +938,15 @@ impl CheckpointStore {
         let previous_digest = self.get_prev_checkpoint_digest(checkpoint_sequence)?;
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
-        let proposal = SignedCheckpointProposal(SignedCheckpoint::new(
+        let summary = SignedCheckpointSummary::new(
             checkpoint_sequence,
             self.name,
             &*self.secret,
             &transactions,
             previous_digest,
-        ));
+        );
 
-        let proposal_and_transactions = CheckpointProposal::new(proposal, transactions);
+        let proposal_and_transactions = CheckpointProposal::new(summary, transactions);
 
         // Record the checkpoint in the locals
         let mut new_locals = locals.as_ref().clone();
