@@ -215,7 +215,7 @@ impl BcsSignable for CheckpointSummary {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointSummaryEnvelope<S> {
-    pub checkpoint: CheckpointSummary,
+    pub summary: CheckpointSummary,
     pub auth_signature: S,
 }
 
@@ -242,7 +242,7 @@ impl SignedCheckpointSummary {
         let signature = AuthoritySignature::new(&checkpoint, signer);
 
         SignedCheckpointSummary {
-            checkpoint,
+            summary: checkpoint,
             auth_signature: AuthoritySignInfo {
                 // TODO: Add proper epoch info
                 epoch: 0,
@@ -260,7 +260,7 @@ impl SignedCheckpointSummary {
     pub fn verify(&self) -> Result<(), SuiError> {
         self.auth_signature
             .signature
-            .verify(&self.checkpoint, self.auth_signature.authority)?;
+            .verify(&self.summary, self.auth_signature.authority)?;
         Ok(())
     }
 
@@ -268,13 +268,13 @@ impl SignedCheckpointSummary {
     pub fn verify_with_transactions(&self, contents: &CheckpointContents) -> Result<(), SuiError> {
         self.verify()?;
         let recomputed = CheckpointSummary::new(
-            *self.checkpoint.sequence_number(),
+            *self.summary.sequence_number(),
             contents,
-            self.checkpoint.previous_digest,
+            self.summary.previous_digest,
         );
 
         fp_ensure!(
-            recomputed == self.checkpoint,
+            recomputed == self.summary,
             SuiError::from("Transaction digest mismatch")
         );
         Ok(())
@@ -303,7 +303,7 @@ impl CertifiedCheckpointSummary {
         );
 
         let certified_checkpoint = CertifiedCheckpointSummary {
-            checkpoint: signed_checkpoints[0].checkpoint.clone(),
+            summary: signed_checkpoints[0].summary.clone(),
             auth_signature: AuthorityQuorumSignInfo {
                 // TODO: Add proper epoch info.
                 epoch: 0,
@@ -326,7 +326,7 @@ impl CertifiedCheckpointSummary {
     pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
         let mut obligation = VerificationObligation::default();
         let mut message = Vec::new();
-        self.checkpoint.write(&mut message);
+        self.summary.write(&mut message);
         let idx = obligation.add_message(message);
         self.auth_signature
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
@@ -342,7 +342,7 @@ impl CertifiedCheckpointSummary {
     ) -> Result<(), SuiError> {
         self.verify(committee)?;
         fp_ensure!(
-            contents.digest() == self.checkpoint.content_digest,
+            contents.digest() == self.summary.content_digest,
             SuiError::from("Transaction digest mismatch")
         );
         Ok(())
@@ -395,8 +395,8 @@ impl CheckpointFragment {
 
         // Check consistency between checkpoint summary and waypoints.
         fp_ensure!(
-            self.diff.first.waypoint == *self.proposer.checkpoint.waypoint
-                && self.diff.second.waypoint == *self.other.checkpoint.waypoint
+            self.diff.first.waypoint == *self.proposer.summary.waypoint
+                && self.diff.second.waypoint == *self.other.summary.waypoint
                 && &self.diff.first.key == self.proposer.authority()
                 && &self.diff.second.key == self.other.authority(),
             SuiError::from("Waypoint diff and checkpoint summary inconsistent")
@@ -415,7 +415,7 @@ impl CheckpointFragment {
     }
 
     pub fn proposer_sequence_number(&self) -> &CheckpointSequenceNumber {
-        self.proposer.checkpoint.sequence_number()
+        self.proposer.summary.sequence_number()
     }
 }
 
@@ -455,7 +455,7 @@ mod tests {
         assert!(proposal.verify_with_transactions(&contents).is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.checkpoint.sequence_number = 2;
+        proposal.summary.sequence_number = 2;
         assert!(proposal.verify().is_err());
     }
 
