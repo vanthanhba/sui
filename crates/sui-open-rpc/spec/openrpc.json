@@ -1241,10 +1241,10 @@
                 "required": [
                   "bcs",
                   "fields",
-                  "function",
                   "instigator",
-                  "module",
                   "packageId",
+                  "transactionFunction",
+                  "transactionModule",
                   "type"
                 ],
                 "properties": {
@@ -1254,17 +1254,17 @@
                   "fields": {
                     "$ref": "#/components/schemas/MoveStruct"
                   },
-                  "function": {
-                    "type": "string"
-                  },
                   "instigator": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
-                  "module": {
-                    "type": "string"
-                  },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "transactionFunction": {
+                    "type": "string"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   },
                   "type": {
                     "type": "string"
@@ -1310,12 +1310,12 @@
                 "type": "object",
                 "required": [
                   "destinationAddr",
-                  "function",
                   "instigator",
-                  "module",
                   "objectId",
                   "packageId",
                   "recipient",
+                  "transactionFunction",
+                  "transactionModule",
                   "type",
                   "version"
                 ],
@@ -1323,14 +1323,8 @@
                   "destinationAddr": {
                     "$ref": "#/components/schemas/SuiAddress"
                   },
-                  "function": {
-                    "type": "string"
-                  },
                   "instigator": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "module": {
-                    "type": "string"
                   },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
@@ -1340,6 +1334,12 @@
                   },
                   "recipient": {
                     "$ref": "#/components/schemas/Owner"
+                  },
+                  "transactionFunction": {
+                    "type": "string"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   },
                   "type": {
                     "$ref": "#/components/schemas/TransferType"
@@ -1362,27 +1362,27 @@
               "deleteObject": {
                 "type": "object",
                 "required": [
-                  "function",
                   "instigator",
-                  "module",
                   "objectId",
-                  "packageId"
+                  "packageId",
+                  "transactionFunction",
+                  "transactionModule"
                 ],
                 "properties": {
-                  "function": {
-                    "type": "string"
-                  },
                   "instigator": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "module": {
-                    "type": "string"
                   },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
                   },
                   "packageId": {
                     "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "transactionFunction": {
+                    "type": "string"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   }
                 }
               }
@@ -1399,22 +1399,16 @@
               "newObject": {
                 "type": "object",
                 "required": [
-                  "function",
                   "instigator",
-                  "module",
                   "objectId",
                   "packageId",
-                  "recipient"
+                  "recipient",
+                  "transactionFunction",
+                  "transactionModule"
                 ],
                 "properties": {
-                  "function": {
-                    "type": "string"
-                  },
                   "instigator": {
                     "$ref": "#/components/schemas/SuiAddress"
-                  },
-                  "module": {
-                    "type": "string"
                   },
                   "objectId": {
                     "$ref": "#/components/schemas/ObjectID"
@@ -1424,6 +1418,12 @@
                   },
                   "recipient": {
                     "$ref": "#/components/schemas/Owner"
+                  },
+                  "transactionFunction": {
+                    "type": "string"
+                  },
+                  "transactionModule": {
+                    "type": "string"
                   }
                 }
               }
